@@ -1,0 +1,137 @@
+name: Upgrade Beat Tap v1.7 and Deploy Pages
+
+on:
+  push:
+    paths:
+      - '.github/workflows/upgrade-v17-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+environment:
+  name: github-pages
+  url: ${{ steps.deployment.outputs.page_url }}
+
+jobs:
+  upgrade-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upgrade character dance to v1.7
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace('<title>Beat Tap v1.6</title>', '<title>Beat Tap v1.7</title>')
+
+          if 'danceStep:0' not in text:
+              text = text.replace('beatFlip:false\n  };', 'beatFlip:false,\n    danceStep:0,\n    measureStep:0\n  };')
+
+          text = text.replace(
+              'state.beatIndex=0;\n    state.beatFlip=false;',
+              'state.beatIndex=0;\n    state.beatFlip=false;\n    state.danceStep=0;\n    state.measureStep=0;'
+          )
+
+          text = re.sub(
+              r'  function triggerCharacterBeat\(\)\{.*?\n  \}\n\n  function triggerCharacterHit',
+              '''  function triggerCharacterBeat(){
+              const stage=$("#characterStage");
+              if(!stage) return;
+              stage.classList.remove("beat-a","beat-b","beat-0","beat-1","beat-2","beat-3","measure-accent");
+              const step=state.danceStep%4;
+              state.danceStep=(state.danceStep+1)%4;
+              state.measureStep++;
+              void stage.offsetWidth;
+              stage.classList.add(`beat-${step}`);
+              if(state.measureStep%4===0) stage.classList.add("measure-accent");
+              const duration=Math.min(440,Math.max(190,47000/state.song.bpm));
+              setTimeout(()=>stage.classList.remove(`beat-${step}`,"measure-accent"),duration);
+            }
+
+            function triggerCharacterHit''',
+              text, count=1, flags=re.S
+          )
+
+          text = re.sub(
+              r'  function triggerCharacterHit\(type\)\{.*?\n  \}\n\n  function loop',
+              '''  function triggerCharacterHit(type){
+              const stage=$("#characterStage");
+              if(!stage) return;
+              retriggerClass(stage,"hit-pop",190);
+              if(type==="perfect") retriggerClass(stage,"perfect-glow",300);
+              if(state.combo>0 && state.combo%10===0) retriggerClass(stage,"combo-dance",540);
+            }
+
+            function loop''',
+              text, count=1, flags=re.S
+          )
+
+          css_start = text.find('.character-stage.beat-a .character-avatar-img')
+          css_end = text.find('#characterName', css_start)
+          if css_start != -1 and css_end != -1:
+              new_css = r'''
+          .character-stage .character-avatar-img{transition:filter .12s linear;transform-origin:50% 88%;will-change:transform}
+          .character-stage.beat-0 .character-avatar-img,.character-stage.beat-1 .character-avatar-img,.character-stage.beat-2 .character-avatar-img,.character-stage.beat-3 .character-avatar-img{animation-duration:min(390ms,var(--beat-ms,500ms));animation-timing-function:cubic-bezier(.18,.72,.25,1);animation-fill-mode:both}
+          .character-stage.dance-boy.beat-0 .character-avatar-img{animation-name:boyStepL}.character-stage.dance-boy.beat-1 .character-avatar-img{animation-name:boyPunch}.character-stage.dance-boy.beat-2 .character-avatar-img{animation-name:boyStepR}.character-stage.dance-boy.beat-3 .character-avatar-img{animation-name:boyJump}
+          .character-stage.dance-woman.beat-0 .character-avatar-img{animation-name:womanGrooveL}.character-stage.dance-woman.beat-1 .character-avatar-img{animation-name:womanTurnL}.character-stage.dance-woman.beat-2 .character-avatar-img{animation-name:womanGrooveR}.character-stage.dance-woman.beat-3 .character-avatar-img{animation-name:womanTurnR}
+          .character-stage.dance-man.beat-0 .character-avatar-img{animation-name:manStepL}.character-stage.dance-man.beat-1 .character-avatar-img{animation-name:manNod}.character-stage.dance-man.beat-2 .character-avatar-img{animation-name:manStepR}.character-stage.dance-man.beat-3 .character-avatar-img{animation-name:manBounce}
+          .character-stage.measure-accent .character-avatar-img{filter:drop-shadow(0 12px 16px rgba(0,0,0,.42)) drop-shadow(0 0 20px rgba(170,90,255,.38))}
+          .character-stage.combo-dance .character-avatar-img{animation:comboDance .54s cubic-bezier(.16,.74,.23,1)}
+          .character-stage.hit-pop .character-avatar-img{animation:hitPop .19s cubic-bezier(.15,.75,.25,1)}
+          .character-stage.perfect-glow .character-avatar-img{filter:drop-shadow(0 12px 16px rgba(0,0,0,.42)) drop-shadow(0 0 28px rgba(255,223,119,.74))}
+          @keyframes boyStepL{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(-20px,-8px) rotate(-4.5deg) scale(1.025)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes boyPunch{0%{transform:translate(0,0)}42%{transform:translate(12px,-6px) rotate(4deg) scale(1.06)}100%{transform:translate(0,0)}}
+          @keyframes boyStepR{0%{transform:translate(0,0)}45%{transform:translate(20px,-8px) rotate(4.5deg) scale(1.025)}100%{transform:translate(0,0)}}
+          @keyframes boyJump{0%{transform:translateY(0)}42%{transform:translateY(-32px) rotate(-2deg) scale(1.045)}100%{transform:translateY(0)}}
+          @keyframes womanGrooveL{0%{transform:translate(0,0)}45%{transform:translate(-20px,-5px) rotate(-4.5deg) scale(1.018)}100%{transform:translate(0,0)}}
+          @keyframes womanTurnL{0%{transform:translate(0,0)}45%{transform:translate(-8px,-10px) rotate(-8deg) scale(1.03)}100%{transform:translate(0,0)}}
+          @keyframes womanGrooveR{0%{transform:translate(0,0)}45%{transform:translate(20px,-5px) rotate(4.5deg) scale(1.018)}100%{transform:translate(0,0)}}
+          @keyframes womanTurnR{0%{transform:translate(0,0)}45%{transform:translate(8px,-10px) rotate(8deg) scale(1.03)}100%{transform:translate(0,0)}}
+          @keyframes manStepL{0%{transform:translate(0,0)}45%{transform:translate(-16px,-6px) rotate(-3deg) scale(1.02)}100%{transform:translate(0,0)}}
+          @keyframes manNod{0%{transform:translate(0,0) scale(1)}45%{transform:translateY(9px) scale(1.04,.982)}100%{transform:translate(0,0) scale(1)}}
+          @keyframes manStepR{0%{transform:translate(0,0)}45%{transform:translate(16px,-6px) rotate(3deg) scale(1.02)}100%{transform:translate(0,0)}}
+          @keyframes manBounce{0%{transform:translateY(0)}45%{transform:translateY(-20px) scale(1.03)}100%{transform:translateY(0)}}
+          @keyframes comboDance{0%{transform:translate(0,0) rotate(0)}20%{transform:translate(-18px,-18px) rotate(-6deg) scale(1.05)}48%{transform:translate(20px,-26px) rotate(6deg) scale(1.075)}74%{transform:translate(-10px,-12px) rotate(-3deg) scale(1.04)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes hitPop{0%{transform:scale(1)}45%{transform:scale(1.085) translateY(-11px)}100%{transform:scale(1)}}
+          .character-stage:not(.beat-0):not(.beat-1):not(.beat-2):not(.beat-3):not(.combo-dance):not(.hit-pop) .character-avatar-img{animation:idleBreath 1.7s ease-in-out infinite}
+          @keyframes idleBreath{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.008)}}
+          '''
+              text = text[:css_start] + new_css + '\n' + text[css_end:]
+
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit upgraded game
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Upgrade Beat Tap character dance to v1.7 [skip ci]"
+            git push
+          fi
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
