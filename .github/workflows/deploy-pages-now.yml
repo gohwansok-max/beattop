@@ -1,0 +1,77 @@
+name: Deploy Beat Tap v1.7 Now
+
+on:
+  push:
+    paths:
+      - '.github/workflows/deploy-pages-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+environment:
+  name: github-pages
+  url: ${{ steps.deployment.outputs.page_url }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject enhanced character dance
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('<title>Beat Tap v1.6</title>','<title>Beat Tap v1.7</title>')
+          marker='/* BEAT_TAP_V17_DANCE */'
+          if marker not in s:
+              css=r'''
+          <style>
+          /* BEAT_TAP_V17_DANCE */
+          .character-stage .character-avatar-img{transform-origin:50% 88%;will-change:transform}
+          .character-stage.dance-boy.beat-a .character-avatar-img{animation:btBoyL .36s cubic-bezier(.18,.72,.25,1)!important}
+          .character-stage.dance-boy.beat-b .character-avatar-img{animation:btBoyR .36s cubic-bezier(.18,.72,.25,1)!important}
+          .character-stage.dance-woman.beat-a .character-avatar-img{animation:btWomanL .38s cubic-bezier(.18,.72,.25,1)!important}
+          .character-stage.dance-woman.beat-b .character-avatar-img{animation:btWomanR .38s cubic-bezier(.18,.72,.25,1)!important}
+          .character-stage.dance-man.beat-a .character-avatar-img{animation:btManL .38s cubic-bezier(.18,.72,.25,1)!important}
+          .character-stage.dance-man.beat-b .character-avatar-img{animation:btManR .38s cubic-bezier(.18,.72,.25,1)!important}
+          .character-stage.hit-pop .character-avatar-img{animation:btHit .2s cubic-bezier(.15,.75,.25,1)!important}
+          .character-stage:not(.beat-a):not(.beat-b):not(.hit-pop) .character-avatar-img{animation:btIdle 1.6s ease-in-out infinite}
+          @keyframes btBoyL{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(-22px,-16px) rotate(-5deg) scale(1.045)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes btBoyR{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(22px,-28px) rotate(5deg) scale(1.055)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes btWomanL{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(-24px,-8px) rotate(-7deg) scale(1.03)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes btWomanR{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(24px,-12px) rotate(7deg) scale(1.035)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes btManL{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(-18px,-10px) rotate(-3deg) scale(1.03)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes btManR{0%{transform:translate(0,0) rotate(0)}45%{transform:translate(18px,-22px) rotate(3deg) scale(1.04)}100%{transform:translate(0,0) rotate(0)}}
+          @keyframes btHit{0%{transform:scale(1)}45%{transform:translateY(-14px) scale(1.1)}100%{transform:scale(1)}}
+          @keyframes btIdle{0%,100%{transform:translateY(0) rotate(-.4deg)}50%{transform:translateY(-5px) rotate(.4deg) scale(1.01)}}
+          </style>
+          '''
+              s=s.replace('</head>',css+'\n</head>')
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
