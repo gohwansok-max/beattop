@@ -1,0 +1,1 @@
+Preparing direct gh-pages PWA deployment for Beat Tap v1.8 Tablet PWA.
